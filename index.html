@@ -218,6 +218,21 @@ main{ flex:1; padding:16px 16px 40px; }
   padding:10px; text-decoration:underline;
 }
 
+/* ---------- week summary ---------- */
+.week-summary{ margin-top:26px; }
+.summary-row{
+  display:flex; justify-content:space-between; align-items:center;
+  background:var(--panel); border-radius:14px;
+  padding:12px 14px; margin-bottom:8px;
+}
+.summary-row .s-day{ font-weight:700; font-size:13px; }
+.summary-row .s-sub{ font-size:11px; color:var(--ink-soft); margin-top:2px; }
+.summary-row .s-status{ font-size:12px; font-weight:700; text-align:right; white-space:nowrap; margin-left:10px; }
+.summary-row.done{ border:1px solid var(--green); }
+.summary-row.done .s-status{ color:var(--green); }
+.summary-row.partial .s-status{ color:var(--red); }
+.summary-row.pending .s-status{ color:var(--ink-soft); }
+
 /* ---------- diet tab ---------- */
 .section-label{
   font-family:"DM"; font-weight:700; font-size:11px; letter-spacing:1px;
@@ -281,6 +296,11 @@ footer.legal{
       <div id="ex-list"></div>
       <div class="day-actions">
         <button class="reset-btn" id="reset-day">Reiniciar marcações do dia</button>
+      </div>
+
+      <div class="week-summary">
+        <div class="section-label">Resumo da semana</div>
+        <div id="summary-list"></div>
       </div>
     </section>
 
@@ -409,6 +429,29 @@ footer.legal{
     return { done: done, total: day.exercises.length };
   }
 
+  // marca (ou remove) o horário em que o dia foi finalizado,
+  // mantendo o resumo sempre atualizado conforme os checks mudam
+  function updateFinishStatus(day){
+    var ds = dayState(day.key);
+    var c = dayCompletion(day);
+    if(c.total > 0 && c.done === c.total){
+      if(!ds.finishedAt) ds.finishedAt = new Date().toISOString();
+    } else {
+      if(ds.finishedAt) ds.finishedAt = null;
+    }
+  }
+
+  function formatFinishedAt(iso){
+    try{
+      var d = new Date(iso);
+      var dd = String(d.getDate()).padStart(2, "0");
+      var mm = String(d.getMonth() + 1).padStart(2, "0");
+      var hh = String(d.getHours()).padStart(2, "0");
+      var mi = String(d.getMinutes()).padStart(2, "0");
+      return "finalizado em " + dd + "/" + mm + " às " + hh + ":" + mi;
+    }catch(e){ return "finalizado"; }
+  }
+
   function renderPills(){
     dayScroll.innerHTML = "";
     DAYS.forEach(function(day){
@@ -483,14 +526,61 @@ footer.legal{
       exList.appendChild(card);
     });
 
+    updateFinishStatus(day);
+    save();
+
     var c = dayCompletion(day);
     progNum.textContent = c.done + "/" + c.total;
     progBar.style.width = (c.total ? (c.done / c.total * 100) : 0) + "%";
   }
 
+  function renderSummary(){
+    var list = document.getElementById("summary-list");
+    list.innerHTML = "";
+    DAYS.forEach(function(day){
+      var ds = dayState(day.key);
+      var c = dayCompletion(day);
+      var row = document.createElement("div");
+      var status, sub;
+
+      if(c.total > 0 && c.done === c.total){
+        row.className = "summary-row done";
+        status = "Concluído";
+        sub = ds.finishedAt ? formatFinishedAt(ds.finishedAt) : "finalizado";
+      } else if(c.done > 0){
+        row.className = "summary-row partial";
+        status = c.done + "/" + c.total;
+        sub = "Em andamento";
+      } else {
+        row.className = "summary-row pending";
+        status = "—";
+        sub = "Não iniciado";
+      }
+
+      var dayName = document.createElement("div");
+      var dTitle = document.createElement("div");
+      dTitle.className = "s-day";
+      dTitle.textContent = day.label + " · " + day.title;
+      var dSub = document.createElement("div");
+      dSub.className = "s-sub";
+      dSub.textContent = sub;
+      dayName.appendChild(dTitle);
+      dayName.appendChild(dSub);
+
+      var st = document.createElement("div");
+      st.className = "s-status";
+      st.textContent = status;
+
+      row.appendChild(dayName);
+      row.appendChild(st);
+      list.appendChild(row);
+    });
+  }
+
   function renderAll(){
     renderPills();
     renderDay();
+    renderSummary();
   }
 
   document.getElementById("reset-day").addEventListener("click", function(){
